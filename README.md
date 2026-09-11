@@ -105,7 +105,11 @@ with these production-specific values:
 ```properties
 PORT=443
 NODE_ENV=production
+GOOGLE_CLIENT_ID=<Google Web OAuth client ID>
+OWNER_FIRST_NAME=<your first name>
+OWNER_LAST_NAME=<your last name>
 SERVER_PUBLIC_IP=35.230.102.241
+COURSE_WEBSOCKET_URL=wss://8.229.22.124
 TLS_CERT_PATH=/certs/server.crt
 TLS_KEY_PATH=/certs/server.key
 ```
@@ -117,9 +121,11 @@ starts HTTPS, and checks the local HTTPS health endpoint using `curl -k` so a se
 certificate can be used.
 
 Before creating the final APK, set `API_BASE_URL=https://35.230.102.241` in
-`frontend/local.properties`, add the server certificate as an Android trust anchor, and add the
-SHA-1 fingerprint of the release signing key to the Android OAuth client. The server certificate
-and Android trust configuration must match before testing the release APK.
+`frontend/local.properties` and add the SHA-1 fingerprint of the release signing key to the Android
+OAuth client. The public self-signed certificate is already committed at
+`frontend/app/src/main/res/raw/m1_backend_certificate.pem` and is trusted through the app's network
+security configuration. If the VM certificate is replaced, replace this public certificate resource
+and rebuild the APK as well.
 
 ## Submission preflight
 

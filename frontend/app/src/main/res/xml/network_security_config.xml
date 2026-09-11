@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Keep platform CAs for Google and Open-Meteo, and additionally trust the
+         M1 backend's self-signed certificate bundled in this app. -->
+    <base-config>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/m1_backend_certificate" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
