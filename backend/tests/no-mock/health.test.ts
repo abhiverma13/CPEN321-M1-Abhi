@@ -2,6 +2,13 @@ import request from 'supertest';
 
 import { createApp } from '../../src/app';
 
+const appOptions = {
+  ownerFirstName: 'Abhi',
+  ownerLastName: 'Verma',
+  serverPublicIp: '203.0.113.10',
+  verifyToken: async (): Promise<void> => undefined,
+};
+
 // Interface GET /health
 describe('Unmocked: GET /health', () => {
   // Input: GET request to /health
@@ -9,7 +16,7 @@ describe('Unmocked: GET /health', () => {
   // Expected behavior: service reports healthy status
   // Expected output: { status: "ok" }
   test('Healthy service', async () => {
-    const response = await request(createApp()).get('/health');
+    const response = await request(createApp(appOptions)).get('/health');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: 'ok' });
@@ -23,7 +30,7 @@ describe('Unmocked: GET /does-not-exist', () => {
   // Expected behavior: request is rejected; no state is changed
   // Expected output: { error: "Not Found" }
   test('Unregistered route', async () => {
-    const response = await request(createApp()).get('/does-not-exist');
+    const response = await request(createApp(appOptions)).get('/does-not-exist');
 
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: 'Not Found' });

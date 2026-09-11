@@ -23,8 +23,20 @@ function Die($msg)  { Write-Host "ERROR: $msg" -ForegroundColor Red; exit 1 }
 # ---------------------------------------------------------------------------
 
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { Die "Docker not found." }
-docker info *> $null
-if ($LASTEXITCODE -ne 0) { Die "Docker is not running." }
+# Docker Desktop may emit host-capability warnings (for example, unavailable
+# blkio throttling) on stderr even when the engine is healthy. PowerShell can
+# promote that stderr text to a terminating error when ErrorActionPreference is
+# Stop, so make only this probe non-terminating and rely on Docker's exit code.
+$originalErrorActionPreference = $ErrorActionPreference
+try {
+    $ErrorActionPreference = 'Continue'
+    docker info *> $null
+    $dockerInfoExitCode = $LASTEXITCODE
+}
+finally {
+    $ErrorActionPreference = $originalErrorActionPreference
+}
+if ($dockerInfoExitCode -ne 0) { Die "Docker is not running." }
 if (-not (Get-Command curl.exe -ErrorAction SilentlyContinue))  { Die "curl.exe not found." }
 
 if (-not (Test-Path 'backend\.env')) { Die "Missing backend\.env - follow the student setup guide first." }
@@ -34,7 +46,12 @@ $BackendPort = '3000'
 if ($backendPortLine) {
     $BackendPort = ($backendPortLine -replace '^PORT=', '').Trim(' ', '"')
 }
-$BackendHealthUrl = if ($env:BACKEND_HEALTH_URL) { $env:BACKEND_HEALTH_URL } else { "http://localhost:$BackendPort/health" }
+$env:PORT = $BackendPort
+$tlsCertConfigured = (Get-Content 'backend\.env' | Where-Object { $_ -match '^TLS_CERT_PATH=.+$' } | Select-Object -First 1) -ne $null
+$tlsKeyConfigured = (Get-Content 'backend\.env' | Where-Object { $_ -match '^TLS_KEY_PATH=.+$' } | Select-Object -First 1) -ne $null
+$usesTls = $tlsCertConfigured -and $tlsKeyConfigured
+$healthScheme = if ($usesTls) { 'https' } else { 'http' }
+$BackendHealthUrl = if ($env:BACKEND_HEALTH_URL) { $env:BACKEND_HEALTH_URL } else { "${healthScheme}://localhost:$BackendPort/health" }
 
 # ---------------------------------------------------------------------------
 # Backend
@@ -47,7 +64,10 @@ if ($LASTEXITCODE -ne 0) { Die "docker compose failed." }
 Info "Waiting for $BackendHealthUrl ..."
 $healthy = $false
 for ($i = 0; $i -lt 120; $i++) {
-    curl.exe -sf $BackendHealthUrl *> $null
+    $curlArgs = @('-s', '-f')
+    if ($usesTls) { $curlArgs += '-k' }
+    $curlArgs += $BackendHealthUrl
+    & curl.exe @curlArgs *> $null
     if ($LASTEXITCODE -eq 0) { $healthy = $true; break }
     Start-Sleep -Seconds 1
 }

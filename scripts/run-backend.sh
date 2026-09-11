@@ -19,8 +19,24 @@ command -v curl >/dev/null 2>&1    || die "curl not found."
 
 [[ -f backend/.env ]] || die "Missing backend/.env — follow the student setup guide first."
 
-BACKEND_PORT="$(grep -E '^PORT=' backend/.env | head -1 | cut -d= -f2- | tr -d ' "' || true)"
-BACKEND_HEALTH_URL="${BACKEND_HEALTH_URL:-http://localhost:${BACKEND_PORT:-3000}/health}"
+BACKEND_PORT="$(sed -n 's/^PORT=//p' backend/.env | head -1 | tr -d '[:space:]' || true)"
+BACKEND_PORT="${BACKEND_PORT:-3000}"
+
+# docker-compose.yml reads PORT while it expands the published-port mapping.
+# An env_file only configures the container; it does not set Compose variables.
+export PORT="$BACKEND_PORT"
+
+TLS_CERT_CONFIGURED="$(grep -E '^TLS_CERT_PATH=.+$' backend/.env | head -1 || true)"
+TLS_KEY_CONFIGURED="$(grep -E '^TLS_KEY_PATH=.+$' backend/.env | head -1 || true)"
+if [[ -n "$TLS_CERT_CONFIGURED" && -n "$TLS_KEY_CONFIGURED" ]]; then
+  HEALTH_SCHEME='https'
+  CURL_TLS_ARGS=(-k)
+else
+  HEALTH_SCHEME='http'
+  CURL_TLS_ARGS=()
+fi
+
+BACKEND_HEALTH_URL="${BACKEND_HEALTH_URL:-${HEALTH_SCHEME}://localhost:${BACKEND_PORT}/health}"
 
 # ---------------------------------------------------------------------------
 # Backend
@@ -31,10 +47,10 @@ docker compose up --build -d
 
 info "Waiting for $BACKEND_HEALTH_URL ..."
 for _ in $(seq 1 120); do
-  curl -sf "$BACKEND_HEALTH_URL" >/dev/null 2>&1 && break
+  curl -sf "${CURL_TLS_ARGS[@]}" "$BACKEND_HEALTH_URL" >/dev/null 2>&1 && break
   sleep 1
 done
-curl -sf "$BACKEND_HEALTH_URL" >/dev/null 2>&1 || die "Backend not healthy. Try: docker compose logs backend"
+curl -sf "${CURL_TLS_ARGS[@]}" "$BACKEND_HEALTH_URL" >/dev/null 2>&1 || die "Backend not healthy. Try: docker compose logs backend"
 
 echo
 info "Backend is up. Stop with: docker compose down"
